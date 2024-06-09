@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
-project(quicsample)
+project(quicsample CXX)
+
+set(CMAKE_CXX_STANDARD 11)
 
 # Set the paths to the library and include directories
 set(LIBMSQUIC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bin)
@@ -14,9 +16,11 @@ add_executable(quicsample
     sample.c
 )
 
+set_source_files_properties(sample.c PROPERTIES LANGUAGE CXX)
+
 # Link the libmsquic library
 target_link_libraries(quicsample 
-    ${LIBMSQUIC_DIR}/libmsquic.so.2.3.5
+    ${LIBMSQUIC_DIR}/libmsquic.so
     crypto
     dl
     numa
