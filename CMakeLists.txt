@@ -20,9 +20,12 @@ set_source_files_properties(sample.c PROPERTIES LANGUAGE CXX)
 
 # Link the libmsquic library
 target_link_libraries(quicsample 
-    ${LIBMSQUIC_DIR}/libmsquic.so
+    ${LIBMSQUIC_DIR}/libmsquic.so.2.3.5
     crypto
     dl
     numa
     pthread
 )
+
+# CLI Command: g++ -L./bin -I./include ./sample.c -o ./sample -lpthread -lnuma -ldl -lcrypto -lmsquic
+# LD_PRELOAD=../bin/libmsquic.so.2.3.5 ./sample
