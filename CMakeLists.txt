@@ -29,3 +29,4 @@ target_link_libraries(quicsample
 
 # CLI Command: g++ -L./bin -I./include ./sample.c -o ./sample -lpthread -lnuma -ldl -lcrypto -lmsquic
 # LD_PRELOAD=../bin/libmsquic.so.2.3.5 ./sample
+# OR create link with ln -s /usr/lib/foo.so.1.1.1 /usr/lib/foo.so
