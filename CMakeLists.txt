@@ -7,7 +7,7 @@ set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Add the include directory
 include_directories(${INCLUDE_DIR})
-link_directories(${INCLUDE_DIR})
+# link_directories(${INCLUDE_DIR})
 
 # Add the executable
 add_executable(quicsample 
