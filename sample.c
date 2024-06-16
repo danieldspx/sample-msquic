@@ -50,6 +50,7 @@ Abstract:
 #include "msquic.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef UNREFERENCED_PARAMETER
 #define UNREFERENCED_PARAMETER(P) (void)(P)
@@ -75,7 +76,7 @@ const uint16_t UdpPort = 4567;
 //
 // The default idle timeout period (1 second) used for the protocol.
 //
-const uint64_t IdleTimeoutMs = 1000;
+const uint64_t IdleTimeoutMs = 1000000;
 
 //
 // The length of buffer sent over the streams in the protocol.
@@ -101,6 +102,9 @@ HQUIC Registration;
 // QUIC layer settings.
 //
 HQUIC Configuration;
+
+// Client Variables
+HQUIC ClientConnection = NULL;
 
 void PrintUsage()
 {
@@ -230,6 +234,14 @@ ServerSend(
     }
 }
 
+void DisplayBufferData(const QUIC_BUFFER* qbuffer, size_t bufferLength) {
+  size_t dataLen = bufferLength - sizeof(QUIC_BUFFER);
+  for (size_t i = 0; i < dataLen; i++) {
+    printf("%c", qbuffer->Buffer[i]);
+  }
+  printf("\n");
+}
+
 //
 // The server's callback for stream events from MsQuic.
 //
@@ -257,7 +269,9 @@ ServerStreamCallback(
         //
         // Data was received from the peer on the stream.
         //
-        printf("[strm][%p] Data received\n", Stream);
+        printf("[strm][%p][%d] Data received: ", Stream, Event->RECEIVE.BufferCount);
+         
+        DisplayBufferData(Event->RECEIVE.Buffers, Event->RECEIVE.TotalBufferLength);
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
         //
@@ -300,6 +314,7 @@ ServerConnectionCallback(
     _Inout_ QUIC_CONNECTION_EVENT* Event
     )
 {
+  printf("Callback server\n");
     UNREFERENCED_PARAMETER(Context);
     switch (Event->Type) {
     case QUIC_CONNECTION_EVENT_CONNECTED:
@@ -538,6 +553,8 @@ RunServer(
         goto Error;
     }
 
+    printf("Listining...\n");
+
     //
     // Continue listening for connections until the Enter key is pressed.
     //
@@ -571,6 +588,10 @@ ClientStreamCallback(
         // A previous StreamSend call has completed, and the context is being
         // returned back to the app.
         //
+        
+        // for (size_t i = 0; i < 3; i++) {
+        //   printf("%c", ((QUIC_BUFFER*)Event->SEND_COMPLETE.ClientContext)->Buffer[i]);
+        // }
         free(Event->SEND_COMPLETE.ClientContext);
         printf("[strm][%p] Data sent\n", Stream);
         break;
@@ -609,23 +630,25 @@ ClientStreamCallback(
 }
 
 void
-ClientSend(
-    _In_ HQUIC Connection
-    )
+ClientLoop()
 {
     QUIC_STATUS Status;
     HQUIC Stream = NULL;
     uint8_t* SendBufferRaw;
     QUIC_BUFFER* SendBuffer;
 
+    // Waits for the client Connection.
+    while(ClientConnection == NULL);
+
     //
     // Create/allocate a new bidirectional stream. The stream is just allocated
     // and no QUIC stream identifier is assigned until it's started.
     //
-    if (QUIC_FAILED(Status = MsQuic->StreamOpen(Connection, QUIC_STREAM_OPEN_FLAG_NONE, ClientStreamCallback, NULL, &Stream))) {
+    if (QUIC_FAILED(Status = MsQuic->StreamOpen(ClientConnection, QUIC_STREAM_OPEN_FLAG_NONE, ClientStreamCallback, NULL, &Stream))) {
         printf("StreamOpen failed, 0x%x!\n", Status);
-        goto Error;
-    }
+        MsQuic->ConnectionShutdown(ClientConnection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        return;
+  }
 
     printf("[strm][%p] Starting...\n", Stream);
 
@@ -636,39 +659,63 @@ ClientSend(
     if (QUIC_FAILED(Status = MsQuic->StreamStart(Stream, QUIC_STREAM_START_FLAG_NONE))) {
         printf("StreamStart failed, 0x%x!\n", Status);
         MsQuic->StreamClose(Stream);
-        goto Error;
+        MsQuic->ConnectionShutdown(ClientConnection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        return;
     }
 
-    //
-    // Allocates and builds the buffer to send over the stream.
-    //
-    SendBufferRaw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + SendBufferLength);
-    if (SendBufferRaw == NULL) {
+    char *line = NULL; 
+    size_t len = 10;
+    ssize_t nread;
+
+    printf("Enter SQL: ");
+    while ((nread = getline(&line, &len, stdin)) != -1) {
+      if (nread == 1) break;
+
+      line[nread - 1] = '\0';
+
+      //
+      // Allocates and builds the buffer to send over the stream.
+      //
+      size_t bufferLen = sizeof(QUIC_BUFFER) + sizeof(char) * nread;
+      
+      SendBufferRaw = (uint8_t*)malloc(bufferLen);
+      if (SendBufferRaw == NULL) {
         printf("SendBuffer allocation failed!\n");
         Status = QUIC_STATUS_OUT_OF_MEMORY;
-        goto Error;
-    }
-    SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
-    SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
-    SendBuffer->Length = SendBufferLength;
+        MsQuic->ConnectionShutdown(ClientConnection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        break;
+      }
+      SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
+      SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
+      SendBuffer->Length = bufferLen;
 
-    printf("[strm][%p] Sending data...\n", Stream);
+      // Initialize the buffer with the string "QSELECT"
+      memcpy(SendBuffer->Buffer, line, sizeof(char) * nread);
 
-    //
-    // Sends the buffer over the stream. Note the FIN flag is passed along with
-    // the buffer. This indicates this is the last buffer on the stream and the
-    // the stream is shut down (in the send direction) immediately after.
-    //
-    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+      printf("[strm][%p] Sending data...\n", Stream);
+
+      // printf("Data being sent: ");
+      // for (size_t i = 0; i < nread; i++) {
+      //   printf("%c(%02x) ", SendBuffer->Buffer[i], SendBuffer->Buffer[i]);
+      // }
+      // printf("\n");
+
+      //
+      // Sends the buffer over the stream. Note the FIN flag is passed along with
+      // the buffer. This indicates this is the last buffer on the stream and the
+      // the stream is shut down (in the send direction) immediately after.
+      //
+      if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_NONE, SendBuffer))) {
         printf("StreamSend failed, 0x%x!\n", Status);
-        free(SendBufferRaw);
-        goto Error;
-    }
+        break;
+      }
 
-Error:
+      // printf("Text Sent: %s (%zd)\n", line, nread); 
+      printf("Enter SQL: ");
+    }
 
     if (QUIC_FAILED(Status)) {
-        MsQuic->ConnectionShutdown(Connection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        MsQuic->ConnectionShutdown(ClientConnection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
     }
 }
 
@@ -692,7 +739,7 @@ ClientConnectionCallback(
         // The handshake has completed for the connection.
         //
         printf("[conn][%p] Connected\n", Connection);
-        ClientSend(Connection);
+        ClientConnection = Connection;
         break;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
         //
@@ -727,11 +774,11 @@ ClientConnectionCallback(
         // A resumption ticket (also called New Session Ticket or NST) was
         // received from the server.
         //
-        printf("[conn][%p] Resumption ticket received (%u bytes):\n", Connection, Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength);
-        for (uint32_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
-            printf("%.2X", (uint8_t)Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicket[i]);
-        }
-        printf("\n");
+        // printf("[conn][%p] Resumption ticket received (%u bytes)\n", Connection, Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength);
+        // for (uint32_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
+        //     printf("%.2X", (uint8_t)Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicket[i]);
+        // }
+        // printf("\n");
         break;
     default:
         break;
@@ -847,13 +894,15 @@ RunClient(
     if (QUIC_FAILED(Status = MsQuic->ConnectionStart(Connection, Configuration, QUIC_ADDRESS_FAMILY_UNSPEC, Target, UdpPort))) {
         printf("ConnectionStart failed, 0x%x!\n", Status);
         goto Error;
-    }
+    }  
 
 Error:
 
     if (QUIC_FAILED(Status) && Connection != NULL) {
         MsQuic->ConnectionClose(Connection);
     }
+
+  ClientLoop();
 }
 
 int

@@ -9,23 +9,16 @@ set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Add the include directory
 include_directories(${INCLUDE_DIR})
-# link_directories(${INCLUDE_DIR})
 
 # Add the executable
-add_executable(quicsample 
-    sample.c
-)
-
+add_executable(quicsample sample.c)
 set_source_files_properties(sample.c PROPERTIES LANGUAGE CXX)
+target_link_libraries(quicsample ${LIBMSQUIC_DIR}/libmsquic.so.2.3.5)
 
-# Link the libmsquic library
-target_link_libraries(quicsample 
-    ${LIBMSQUIC_DIR}/libmsquic.so.2.3.5
-    crypto
-    dl
-    numa
-    pthread
-)
+# add_executable(client client.cpp)
+# set_source_files_properties(client.cpp PROPERTIES LANGUAGE CXX)
+# target_link_libraries(client ${LIBMSQUIC_DIR}/libmsquic.so.2.3.5)
+
 
 # CLI Command: g++ -L./bin -I./include ./sample.c -o ./sample -lpthread -lnuma -ldl -lcrypto -lmsquic
 # LD_PRELOAD=../bin/libmsquic.so.2.3.5 ./sample
