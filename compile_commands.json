@@ -1,13 +1,7 @@
 [
 {
-  "directory": "/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/build",
-  "command": "/usr/bin/cc  -I/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/include  -o CMakeFiles/quicsample.dir/sample.c.o -c /home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/sample.c",
-  "file": "/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/sample.c"
-},
-{
-  "directory": "/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/build",
-  "command": "/usr/bin/cc  -I/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/include  -o CMakeFiles/quicsample.dir/client.c.o -c /home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/client.c",
-  "file": "/home/daniel/Documentos/UFSM/tcc/msquic/standalone-sample/client.c"
+  "directory": "/home/daniel.pereira/Documentos/UFSM/tcc/msquic/standalone-sample/build",
+  "command": "/bin/c++  -I/home/daniel.pereira/Documentos/UFSM/tcc/msquic/standalone-sample/include -std=gnu++11 -o CMakeFiles/quicsample.dir/sample.c.o -c /home/daniel.pereira/Documentos/UFSM/tcc/msquic/standalone-sample/sample.c",
+  "file": "/home/daniel.pereira/Documentos/UFSM/tcc/msquic/standalone-sample/sample.c"
 }
 ]
-
